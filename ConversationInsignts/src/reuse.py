@@ -34,13 +34,37 @@ from openai import OpenAI
 from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
 from langchain.schema.output_parser import StrOutputParser
 
-api_key="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"
-os.environ['OPENAI_API_KEY'] = api_key
 
-@st.cache_data()
+def extract_entities_and_relationships(customer_info_queue, conversation_queue):
+    convsummary = ""
+    customer_info = {}
+    conv_pdf = "artifacts/Conversation_Transcript.pdf"
+    convsummary = summarize_conversation(conv_pdf)
+
+    conversation_queue.put(convsummary)
+    summary_pdf = create_pdf(convsummary, "artifacts/Summary_Transcript.pdf")
+
+    customer_info  = extract_key_entities(summary_pdf)
+
+    customer_info_queue.put(customer_info)
+    
+def extract_sentiments(aspects_and_sentiments_queue):
+    aspects_and_sentiments = ""
+    conv_pdf = "artifacts/Conversation_Transcript.pdf"
+    conversation = read_pdf(conv_pdf)
+    aspects_and_sentiments = extract_sentiments_from_conversation(conversation)
+
+    aspects_and_sentiments_queue.put(aspects_and_sentiments)
+    
+def extract_competitor_comparison(competitor_comparison_queue):
+    competitor_comparison_text = ""
+    competitor_comparison_text = compare_competitors("MG Comet EV")
+
+    competitor_comparison_queue.put(competitor_comparison_text)
+
 def convert_speech_to_text(audiofile):
-    openai.api_key = api_key
-    with open("/Users/I046703/Documents/MG Motors/"+audiofile, "rb") as audio_file:
+    openai.api_key = os.environ['OPENAI_API_KEY']
+    with open("data/"+audiofile, "rb") as audio_file:
         client = OpenAI()
         translated_text = client.audio.transcriptions.create(
             file = audio_file,
@@ -75,9 +99,9 @@ def read_pdf(file):
 def extract_key_entities(summary_pdf):
 
     #Neo4j Instance
-    url = "neo4j+ssc://98af59bf.databases.neo4j.io"
+    url = os.environ["NEO4J_URL"]
     username ="neo4j"
-    password = "HsAdFamUj_8TGrHKvxXmiSz7k4vVOHKuMqtWZ-aWrxE"
+    password = os.environ['NEO4J_PWD']
     graph = Neo4jGraph(
         url=url,
         username=username,
@@ -197,7 +221,6 @@ def extract_key_entities(summary_pdf):
     # Document Loader - Imports and reads data
     loader = PyPDFLoader("artifacts/Summary_Transcript.pdf")
     documents = loader.load()
-    print("Documents", documents)
 
     # Define chunking strategy
     text_splitter = TokenTextSplitter(chunk_size=2048, chunk_overlap=24)
